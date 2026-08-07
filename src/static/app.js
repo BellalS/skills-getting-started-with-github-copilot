@@ -20,14 +20,74 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
+        const participantsList = details.participants
+          .map(participant => `
+            <li data-participant="${participant}" data-activity="${name}">
+              <span>${participant}</span>
+              <button class="delete-btn" aria-label="Remove ${participant}" title="Remove participant">✕</button>
+            </li>
+          `)
+          .join("");
+
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          <div class="participants-section">
+            <h5>Current Participants</h5>
+            <ul class="participants-list">
+              ${participantsList || "<li class='no-participants'>No participants yet</li>"}
+            </ul>
+          </div>
         `;
 
         activitiesList.appendChild(activityCard);
+
+        // Add delete button event listeners
+        const deleteButtons = activityCard.querySelectorAll(".delete-btn");
+        deleteButtons.forEach(button => {
+          button.addEventListener("click", async (event) => {
+            event.preventDefault();
+            
+            const listItem = button.closest("li");
+            const participant = listItem.getAttribute("data-participant");
+            const activity = listItem.getAttribute("data-activity");
+
+            try {
+              const response = await fetch(
+                `/activities/${encodeURIComponent(activity)}/unregister?email=${encodeURIComponent(participant)}`,
+                {
+                  method: "DELETE",
+                }
+              );
+
+              if (response.ok) {
+                // Remove the list item from the DOM
+                listItem.style.opacity = "0.5";
+                setTimeout(() => {
+                  listItem.remove();
+                  // If no more participants, show the "no participants" message
+                  const list = button.closest(".participants-list");
+                  if (list.children.length === 0) {
+                    const noParticipantsItem = document.createElement("li");
+                    noParticipantsItem.className = "no-participants";
+                    noParticipantsItem.textContent = "No participants yet";
+                    list.appendChild(noParticipantsItem);
+                  }
+                  // Refresh to update spot count
+                  fetchActivities();
+                }, 300);
+              } else {
+                const result = await response.json();
+                alert(result.detail || "Failed to remove participant");
+              }
+            } catch (error) {
+              console.error("Error removing participant:", error);
+              alert("Failed to remove participant");
+            }
+          });
+        });
 
         // Add option to select dropdown
         const option = document.createElement("option");
@@ -62,6 +122,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
